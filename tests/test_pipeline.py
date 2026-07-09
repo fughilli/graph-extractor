@@ -109,3 +109,39 @@ def test_cylinder_surface_mode_keeps_points():
     topo = extract(pts, cfg)
     # Surface mode does not move or merge points.
     assert len(topo.coords) == len(pts)
+
+
+def _torus_grid(major_radius, minor_radius, n_major, n_minor):
+    """Surface samples on a torus whose centerline is a circle of radius R."""
+    u = np.linspace(0.0, 2 * np.pi, n_major, endpoint=False)
+    v = np.linspace(0.0, 2 * np.pi, n_minor, endpoint=False)
+    pts = []
+    for uu in u:
+        cu, su = np.cos(uu), np.sin(uu)
+        for vv in v:
+            rr = major_radius + minor_radius * np.cos(vv)
+            pts.append((rr * cu, rr * su, minor_radius * np.sin(vv)))
+    return np.asarray(pts)
+
+
+def test_torus_collapses_to_one_loop():
+    # A *thick* looped tube: the collapse reduction must recover the underlying
+    # cycle (a segment closing on itself, no junctions and no tips).
+    R, r = 5.0, 1.0
+    pts = _torus_grid(major_radius=R, minor_radius=r, n_major=32, n_minor=12)
+
+    topo = extract(pts, Config(reduce=ReduceConfig(mode="collapse")))
+
+    assert len(topo.branch_points) == 0
+    assert len(topo.segments) == 1
+    seg = topo.segments[0]
+    assert seg.closed                    # a cycle, not an open chain
+    assert seg.n_branch_ends == 0
+
+    # The recovered centerline is the tube axis: a ring of radius ~R in z~0,
+    # not the r-thick surface it was collapsed from.
+    radial = np.linalg.norm(topo.coords[:, :2], axis=1)
+    assert abs(radial.mean() - R) < 0.25 * R
+    assert np.abs(topo.coords[:, 2]).mean() < 0.25 * r
+    # Keep a node per cross-section rather than collapsing the loop to a blob.
+    assert len(seg.points) >= 24

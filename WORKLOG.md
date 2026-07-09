@@ -50,10 +50,10 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
    detection when collapsing. Both are currently dead fields.
 2. **Per-region `auto`.** Replace the single global collapse/surface choice
    with a per-point (mixed) reduction decision.
-3. ~~**Loop-through-collapse end-to-end test.**~~ *Done* — `tests/test_viz.py`
-   collapses a thick torus to a single closed loop (0 branch points). A
-   dedicated copy in `tests/test_pipeline.py` (independent of the viz backend)
-   would still be worthwhile.
+3. ~~**Loop-through-collapse end-to-end test.**~~ *Done* —
+   `tests/test_pipeline.py::test_torus_collapses_to_one_loop` collapses a thick
+   torus to a single closed loop (0 branch points, centerline ring of radius R);
+   `tests/test_viz.py` covers the same via the viz backend.
 4. **I/O.** Readers/writers for common point-cloud formats (`.ply`/`.xyz`/`.npy`);
    the *visualization* half of the original item is now covered by `viz/`.
 
