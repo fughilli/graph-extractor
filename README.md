@@ -322,8 +322,8 @@ Config(
 ```
 
 > **Note.** `collapse_radius` (the τ threshold) and `axis_hint` are declared as
-> placeholders for the intended `auto`/collapse refinements described below but
-> are **not yet wired in** — see §10.
+> placeholders for the intended `auto`/collapse refinements but are **not yet
+> wired in** — see the roadmap in `WORKLOG.md`.
 
 **`auto` mode (current heuristic).** `auto` makes a *single global* choice, not
 a per-region one. It estimates local shape from neighbourhood covariance
@@ -410,21 +410,15 @@ A correct extraction reproduces the underlying network's topology:
 - each segment correctly records its two terminators (branch point vs. tip),
 - loops and disconnected components are preserved.
 
-Current test coverage (`tests/`): open chains, Y / H junctions, adjacent
-junctions, pure loops, lollipops, isolated points, edge-partition invariants,
-and end-to-end collapse of a cylinder to its axis and a branching tube to a
-single junction.
+The test suite (`tests/`) exercises the topology core and the end-to-end
+pipeline. See **`WORKLOG.md`** for the current coverage inventory.
 
 ---
 
-## 10. Not yet implemented / future work
+## 10. Project status & roadmap
 
-- **`collapse_radius` (τ)** and **`axis_hint`** are declared in `ReduceConfig`
-  but unused. Intended: τ gates collapse-vs-surface by local minor extent; the
-  axis hint seeds ring detection when collapsing.
-- **Per-region `auto`.** `auto` currently makes one global collapse/surface
-  decision; per-point (mixed) reduction is future work.
-- **Loop-through-collapse validation.** The topology core handles loops and
-  cycles (tested directly), but there is no end-to-end test of a *thick* looped
-  tube (e.g. a torus) surviving reduction.
-- **Visualization** helpers and I/O for common point-cloud formats.
+Current implementation status, the test-coverage inventory, the
+reserved-but-unused config fields, and the roadmap of not-yet-implemented work
+are tracked in **`WORKLOG.md`** at the repo root (read alongside `git log`)
+rather than duplicated here. That split keeps this README a durable
+specification and the WORKLOG the forward-looking status board.
