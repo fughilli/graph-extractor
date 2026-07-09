@@ -1,0 +1,13 @@
+load("@rules_uv//uv:pip.bzl", "pip_compile")
+
+package(default_visibility = ["//visibility:public"])
+
+# Regenerate the lockfile:  bazel run //:generate_requirements_lock
+# uv resolves the full transitive set of requirements.in into requirements.lock.
+pip_compile(
+    name = "generate_requirements_lock",
+    requirements_in = "//:requirements.in",
+    requirements_txt = "//:requirements.lock",
+)
+
+exports_files(["requirements.in", "requirements.lock"])

@@ -1,0 +1,8 @@
+# Direct dependencies (human-edited). Regenerate the lockfile with:
+#   bazel run //:generate_requirements_lock
+networkx
+numpy
+scipy
+
+# Test-only
+pytest

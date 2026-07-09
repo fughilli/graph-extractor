@@ -1,0 +1,26 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+# One py_test per test file, each driven through the shared pytest runner.
+[
+    py_test(
+        name = name,
+        size = "small",
+        srcs = [
+            "pytest_runner.py",
+            "%s.py" % name,
+        ],
+        main = "pytest_runner.py",
+        args = ["-q", "$(location %s.py)" % name],
+        deps = [
+            "//skelgraph",
+            "@pypi//networkx",
+            "@pypi//numpy",
+            "@pypi//pytest",
+            "@pypi//scipy",
+        ],
+    )
+    for name in [
+        "test_topology",
+        "test_pipeline",
+    ]
+]

@@ -1,0 +1,3 @@
+# Cache the pinned Bazel binaries inside the project tree (relative to the
+# workspace root) so they survive container rebuilds / fresh homes.
+BAZELISK_HOME=.bazelisk

@@ -1,0 +1,4 @@
+.bazel-disk-cache
+.bazel-repo-cache
+.bazelisk
+.git

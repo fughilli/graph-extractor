@@ -1,0 +1,15 @@
+load("@rules_python//python:defs.bzl", "py_library")
+
+# The package importable as `import skelgraph`. `imports = [".."]` puts the repo
+# root on sys.path so the `skelgraph/` directory resolves as the top-level pkg.
+py_library(
+    name = "skelgraph",
+    srcs = glob(["*.py"]),
+    imports = [".."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@pypi//networkx",
+        "@pypi//numpy",
+        "@pypi//scipy",
+    ],
+)

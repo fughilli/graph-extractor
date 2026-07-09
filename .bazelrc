@@ -1,0 +1,17 @@
+# bzlmod is the source of truth; no WORKSPACE.
+common --enable_bzlmod
+common --registry=https://bcr.bazel.build
+
+# Some Bazel/bundled-JDK combos emit SVE instructions that SIGILL the JVM on
+# certain aarch64 hosts; disabling SVE is harmless elsewhere, so set it always.
+startup --host_jvm_args=-XX:UseSVE=0
+
+# Hermetic action env so the on-disk cache is correct across machines.
+build --incompatible_strict_action_env
+
+# Persist caches in the project tree (dot-prefixed, gitignored) so they survive
+# container restarts that wipe ~/.cache. Both are content-addressable.
+build  --disk_cache=.bazel-disk-cache        # action outputs
+common --repository_cache=.bazel-repo-cache  # downloaded external archives
+
+test --test_output=errors

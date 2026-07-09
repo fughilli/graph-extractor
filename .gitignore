@@ -4,3 +4,9 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Bazel
+/bazel-*
+/.bazel-disk-cache/
+/.bazel-repo-cache/
+/.bazelisk/
