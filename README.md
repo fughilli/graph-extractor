@@ -291,33 +291,46 @@ itself carries the structure of interest.
 > mode when the surface is itself ribbon/curve-like. In **collapse** mode the
 > output is always a clean 1-D graph.
 
-### 6.2 Reduction options
+### 6.2 Configuration (as implemented)
 
+Configuration is a `Config` with two nested groups plus two cleanup knobs
+(`skelgraph/config.py`):
+
+```python
+Config(
+    reduce = ReduceConfig(
+        mode = "none",                    # none | surface | collapse | auto
+        scale = None,                     # sampling pitch (None → estimated as
+                                          #   median nearest-neighbour distance)
+        contraction_iterations = 10,      # collapse: Laplacian contraction steps
+        contraction_neighbor_factor = 2.5,# collapse: neighbour radius = factor·scale
+        wl_init = None, sl = 1.6, wh = 1.0,# collapse: contraction weight schedule
+        merge_factor = 0.5,               # collapse: fuse edge if len < factor ·
+                                          #   longest incident edge (adaptive)
+        # collapse_radius, axis_hint      # RESERVED — declared but not yet used
+    ),
+    neighbors = NeighborConfig(           # used by none / surface / auto modes
+        method = "radius",                # radius | mst | knn
+        scale = None,                     # None → estimated pitch
+        radius_factor = 1.6,              # radius = radius_factor · scale
+        k = 10,                           # neighbours for knn / mst
+    ),
+    min_stub_points = 0,                  # prune leaf stubs shorter than this (0=off)
+    junction_merge_factor = 2.0,          # consolidate junctions closer than
+                                          #   factor · median-edge-length (0=off)
+)
 ```
-config.reduction.mode :
-    "collapse"   → contract thin/tubular structure onto its medial axis
-                   (produces a 1-D centerline graph)
-    "surface"    → preserve surface/manifold connectivity as-is (2-D graph)
-    "auto"       → decide per local region from geometry (see below)
-    "none"       → treat input as already a 1-D skeleton; skip reduction
 
-config.reduction.scale        : neighbourhood radius (or k) used to infer
-                                adjacency between samples
-config.reduction.collapse_radius (τ) :
-      structures whose *minor* local extent is below τ are collapsed;
-      broader structures are kept as surface.  τ = 0 → always surface;
-      τ = ∞ → always collapse.  Drives "auto" mode.
-config.reduction.axis_hint    : optional known axis/orientation to guide
-                                ring detection when collapsing.
-```
+> **Note.** `collapse_radius` (the τ threshold) and `axis_hint` are declared as
+> placeholders for the intended `auto`/collapse refinements described below but
+> are **not yet wired in** — see §10.
 
-**"auto" heuristic.** For each point, estimate the local shape from the
-neighbourhood covariance eigenvalues `λ1 ≥ λ2 ≥ λ3`:
-- `λ1 ≫ λ2 ≈ λ3` → already curve-like (1-D) → keep.
-- `λ1 ≈ λ2 ≫ λ3` → sheet/tube-like (2-D) → *collapse* across the thin
-  direction if the minor extent < τ, else preserve as surface.
-- Ring/loop closure at the `scale` neighbourhood is what distinguishes a tube
-  (collapse to axis) from an open sheet.
+**`auto` mode (current heuristic).** `auto` makes a *single global* choice, not
+a per-region one. It estimates local shape from neighbourhood covariance
+eigenvalues `λ1 ≥ λ2 ≥ λ3` at each point and flags a point as sheet/tube-like
+when `λ2/λ1 > 0.35` and `λ3/λ1 < 0.2`. If more than half the points are
+sheet-like it runs `collapse`, otherwise `surface`. (The τ / `collapse_radius`
+per-region gating in the original sketch is future work.)
 
 ## 7. Pipeline (as implemented)
 
@@ -401,3 +414,17 @@ Current test coverage (`tests/`): open chains, Y / H junctions, adjacent
 junctions, pure loops, lollipops, isolated points, edge-partition invariants,
 and end-to-end collapse of a cylinder to its axis and a branching tube to a
 single junction.
+
+---
+
+## 10. Not yet implemented / future work
+
+- **`collapse_radius` (τ)** and **`axis_hint`** are declared in `ReduceConfig`
+  but unused. Intended: τ gates collapse-vs-surface by local minor extent; the
+  axis hint seeds ring detection when collapsing.
+- **Per-region `auto`.** `auto` currently makes one global collapse/surface
+  decision; per-point (mixed) reduction is future work.
+- **Loop-through-collapse validation.** The topology core handles loops and
+  cycles (tested directly), but there is no end-to-end test of a *thick* looped
+  tube (e.g. a torus) surviving reduction.
+- **Visualization** helpers and I/O for common point-cloud formats.
