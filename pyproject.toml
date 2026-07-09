@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skelgraph"
+version = "0.1.0"
+description = "Extract graph connectivity (branch points & segments) from 3-D point clouds sampled along curve networks"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "networkx",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools]
+packages = ["skelgraph"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
