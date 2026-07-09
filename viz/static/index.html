@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>skelgraph — interactive pipeline viewer</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #171b22; --panel2: #1e242d; --line: #2a323d;
+    --fg: #d7dee7; --muted: #8b97a6; --accent: #4da3ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--fg); }
+  #app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
+  #sidebar { background: var(--panel); border-right: 1px solid var(--line);
+    overflow-y: auto; padding: 12px 14px 40px; }
+  #main { position: relative; }
+  canvas { display: block; }
+  h1 { font-size: 15px; margin: 2px 0 2px; letter-spacing: .3px; }
+  .sub { color: var(--muted); font-size: 11px; margin-bottom: 12px; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin: 18px 0 8px; border-bottom: 1px solid var(--line);
+    padding-bottom: 4px; }
+  label.row { display: grid; grid-template-columns: 1fr 66px; gap: 8px;
+    align-items: center; margin: 7px 0; }
+  label.row > span { color: var(--fg); }
+  input[type=range] { width: 100%; }
+  select, input[type=number] { width: 100%; background: var(--panel2);
+    color: var(--fg); border: 1px solid var(--line); border-radius: 5px;
+    padding: 4px 6px; font: inherit; }
+  .val { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .group { margin-bottom: 6px; }
+  .toggles label { display: flex; align-items: center; gap: 7px; margin: 5px 0;
+    cursor: pointer; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  button { background: var(--accent); color: #04121f; border: 0; border-radius: 6px;
+    padding: 8px 10px; font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
+  button.ghost { background: var(--panel2); color: var(--fg); border: 1px solid var(--line);
+    font-weight: 500; }
+  .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  /* stage stepper */
+  #stepper { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; background: rgba(23,27,34,.9); padding: 6px;
+    border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px);
+    max-width: 92%; flex-wrap: wrap; justify-content: center; }
+  .step { padding: 5px 10px; border-radius: 7px; cursor: pointer; color: var(--muted);
+    white-space: nowrap; font-size: 12px; border: 1px solid transparent; }
+  .step.active { background: var(--accent); color: #04121f; font-weight: 600; }
+  .step:hover:not(.active) { color: var(--fg); border-color: var(--line); }
+  /* info panel */
+  #info { position: absolute; bottom: 12px; left: 12px; max-width: 46%;
+    background: rgba(23,27,34,.9); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; backdrop-filter: blur(6px); }
+  #summary { font-weight: 600; }
+  #notes { color: var(--muted); margin-top: 4px; font-size: 12px; white-space: pre-line; }
+  #legend { position: absolute; bottom: 12px; right: 12px;
+    background: rgba(23,27,34,.9); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; backdrop-filter: blur(6px); font-size: 12px; }
+  #legend div { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+  #anim { display: none; margin-top: 6px; }
+  #status { position: absolute; top: 12px; right: 12px; color: var(--muted);
+    font-size: 12px; background: rgba(23,27,34,.85); padding: 4px 10px;
+    border-radius: 8px; border: 1px solid var(--line); }
+  .err { color: #ff6b6b; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>skelgraph</h1>
+    <div class="sub">Point cloud → branch points &amp; segments.<br>Every stage is the real pipeline.</div>
+
+    <h2>Dataset</h2>
+    <select id="dataset"></select>
+    <div id="gen-params" style="margin-top:8px"></div>
+
+    <h2>Pipeline config</h2>
+    <div id="config-params"></div>
+    <label class="row" style="margin-top:8px">
+      <span>Animate contraction</span>
+      <input type="checkbox" id="animate" style="justify-self:end;width:auto">
+    </label>
+
+    <div class="btnrow">
+      <button id="run">Run ▸</button>
+      <button id="reseed" class="ghost">Reseed ⟳</button>
+    </div>
+    <label class="row" style="margin-top:10px">
+      <span>Auto-run on change</span>
+      <input type="checkbox" id="autorun" checked style="justify-self:end;width:auto">
+    </label>
+
+    <h2>Layers</h2>
+    <div class="toggles" id="layers"></div>
+
+    <div id="anim">
+      <h2>Contraction</h2>
+      <label class="row"><span>Frame</span><span class="val" id="frameval">0</span></label>
+      <input type="range" id="frame" min="0" max="0" value="0" step="1">
+      <button id="play" class="ghost" style="margin-top:6px">▶ Play</button>
+    </div>
+  </aside>
+
+  <div id="main">
+    <div id="stepper"></div>
+    <div id="status">loading…</div>
+    <div id="info"><div id="summary"></div><div id="notes"></div></div>
+    <div id="legend"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------------------------------------------------------------- palette
+const COL = {
+  curve: 0x8b98a8, surface: 0xd0a962, contracted: 0x59c1ff,
+  edge: 0x50606f, skelNode: 0x8fb2d6, merged: 0xff3a63,
+  tip: 0x35db8a, interior: 0x5b86d6, branch: 0xff4d4d, isolated: 0x9aa6b3,
+  truth: 0x39f2a0,
+};
+const SEG_HUES = [0.0, 0.58, 0.12, 0.75, 0.34, 0.88, 0.46, 0.66, 0.20, 0.94];
+
+// ---------------------------------------------------------------- three.js
+const main = document.getElementById('main');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+main.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1116);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 5000);
+camera.position.set(6, 6, 12);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+const dir = new THREE.DirectionalLight(0xffffff, 0.7); dir.position.set(4, 8, 6);
+scene.add(dir);
+const grid = new THREE.GridHelper(40, 40, 0x223, 0x1a2029);
+grid.material.opacity = 0.35; grid.material.transparent = true; scene.add(grid);
+
+function resize() {
+  const w = main.clientWidth, h = main.clientHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+(function loop(){ requestAnimationFrame(loop); controls.update();
+  if (playing) tickAnim(); renderer.render(scene, camera); })();
+
+// ---------------------------------------------------------------- geometry helpers
+const root = new THREE.Group(); scene.add(root);
+let sceneScale = 1;
+
+function disposeGroup(g){ g.traverse(o=>{ o.geometry?.dispose(); o.material?.dispose?.(); }); }
+function clearRoot(){ disposeGroup(root); root.clear(); }
+
+function pointsObj(coords, color, sizeMul=1, perVertexColors=null){
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(coords.length*3);
+  coords.forEach((p,i)=>{ pos[i*3]=p[0]; pos[i*3+1]=p[1]; pos[i*3+2]=p[2]; });
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.PointsMaterial({ size: sceneScale*0.02*sizeMul,
+    sizeAttenuation:true, color: color??0xffffff });
+  if (perVertexColors){
+    const c = new Float32Array(coords.length*3); const tmp = new THREE.Color();
+    perVertexColors.forEach((hex,i)=>{ tmp.set(hex); c[i*3]=tmp.r;c[i*3+1]=tmp.g;c[i*3+2]=tmp.b; });
+    g.setAttribute('color', new THREE.BufferAttribute(c,3));
+    mat.vertexColors = true; mat.color.set(0xffffff);
+  }
+  return new THREE.Points(g, mat);
+}
+
+function segmentsObj(coords, edges, color, opacity=1, width=1){
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(edges.length*6);
+  edges.forEach((e,i)=>{ const a=coords[e[0]], b=coords[e[1]];
+    pos[i*6]=a[0];pos[i*6+1]=a[1];pos[i*6+2]=a[2];
+    pos[i*6+3]=b[0];pos[i*6+4]=b[1];pos[i*6+5]=b[2]; });
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat = new THREE.LineBasicMaterial({ color, transparent: opacity<1, opacity });
+  return new THREE.LineSegments(g, mat);
+}
+
+function polylineObj(pts, color, closed=false, dashed=false){
+  const arr = pts.slice();
+  if (closed && arr.length>1){ const a=arr[0], b=arr[arr.length-1];
+    if (a[0]!==b[0]||a[1]!==b[1]||a[2]!==b[2]) arr.push(a); }
+  const g = new THREE.BufferGeometry().setFromPoints(arr.map(p=>new THREE.Vector3(p[0],p[1],p[2])));
+  let mat;
+  if (dashed){ mat = new THREE.LineDashedMaterial({ color, dashSize: sceneScale*0.12,
+    gapSize: sceneScale*0.08, transparent:true, opacity:0.9 }); }
+  else mat = new THREE.LineBasicMaterial({ color, linewidth:2 });
+  const line = new THREE.Line(g, mat);
+  if (dashed) line.computeLineDistances();
+  return line;
+}
+
+function sphere(p, color, r){
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12),
+    new THREE.MeshLambertMaterial({ color }));
+  m.position.set(p[0],p[1],p[2]); return m;
+}
+
+function fit(coords){
+  const box = new THREE.Box3();
+  coords.forEach(p=>box.expandByPoint(new THREE.Vector3(p[0],p[1],p[2])));
+  if (box.isEmpty()) return;
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  sceneScale = Math.max(s.x,s.y,s.z,1);
+  controls.target.copy(c);
+  camera.position.set(c.x + sceneScale*1.1, c.y + sceneScale*0.9, c.z + sceneScale*1.8);
+  camera.near = sceneScale/500; camera.far = sceneScale*500; camera.updateProjectionMatrix();
+  grid.position.set(c.x, box.min.y, c.z);
+  grid.scale.setScalar(sceneScale/8);
+}
+
+// ---------------------------------------------------------------- layers
+const LAYER_DEFS = [
+  ['input',       'Input cloud',            COL.curve],
+  ['truth',       'Ground truth',           COL.truth],
+  ['contraction', 'Contraction',            COL.contracted],
+  ['adjacency',   'Adjacency graph',        COL.edge],
+  ['skeleton',    'Skeleton (collapse)',    COL.skelNode],
+  ['merged',      'Consolidated junctions', COL.merged],
+  ['degrees',     'Degree classes',         COL.branch],
+  ['branch',      'Branch points',          COL.branch],
+  ['segments',    'Segments',               0xffffff],
+];
+const layerGroups = {};       // name -> THREE.Group
+const layerVisible = {};      // name -> bool
+LAYER_DEFS.forEach(([n])=>{ const g = new THREE.Group(); layerGroups[n]=g; root.add(g); });
+
+const layersEl = document.getElementById('layers');
+LAYER_DEFS.forEach(([name,label,color])=>{
+  const l = document.createElement('label');
+  const sw = document.createElement('span'); sw.className='sw';
+  sw.style.background = '#'+color.toString(16).padStart(6,'0');
+  const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.layer=name;
+  cb.addEventListener('change',()=>{ layerVisible[name]=cb.checked; applyVisibility(); });
+  l.append(cb, sw, document.createTextNode(label));
+  layersEl.appendChild(l);
+});
+function setLayer(name,on){ layerVisible[name]=on;
+  const cb = layersEl.querySelector(`[data-layer="${name}"]`); if(cb) cb.checked=on; }
+function applyVisibility(){ for(const [n,g] of Object.entries(layerGroups)) g.visible=!!layerVisible[n]; }
+
+// ---------------------------------------------------------------- rebuild scene from a result
+let lastResult = null;
+let animFrames = null, animAttr = null;
+
+function rebuild(res){
+  lastResult = res;
+  clearRoot();
+  LAYER_DEFS.forEach(([n])=>{ const g=new THREE.Group(); layerGroups[n]=g; root.add(g); });
+  const S = res.stages;
+  const input = S.input.points;
+  fit(input);
+
+  // input cloud coloured by curve/surface label
+  const labels = res.meta.labels || [];
+  const cols = input.map((_,i)=> labels[i] ? COL.surface : COL.curve);
+  layerGroups.input.add(pointsObj(input, null, 1.0, cols));
+
+  // ground truth
+  (res.meta.truth.polylines||[]).forEach(pl=>{
+    if(pl.length>1) layerGroups.truth.add(polylineObj(pl, COL.truth, false, true)); });
+  (res.meta.truth.branch_points||[]).forEach(p=> layerGroups.truth.add(sphere(p, COL.truth, sceneScale*0.02)));
+
+  // reduce stage
+  const rd = S.reduce;
+  animFrames = null; document.getElementById('anim').style.display='none';
+  if (rd.mode === 'collapse'){
+    layerGroups.adjacency.add(segmentsObj(rd.contracted, rd.contraction_graph_edges, COL.edge, 0.5));
+    const cpts = pointsObj(rd.contracted, COL.contracted, 1.1);
+    layerGroups.contraction.add(cpts);
+    // skeleton nodes + edges
+    layerGroups.skeleton.add(segmentsObj(rd.skeleton_points, rd.skeleton_edges, COL.skelNode, 0.9));
+    layerGroups.skeleton.add(pointsObj(rd.skeleton_points, COL.skelNode, 1.3));
+    if (rd.contraction_frames){
+      animFrames = rd.contraction_frames; animAttr = cpts.geometry.getAttribute('position');
+      const fr = document.getElementById('frame');
+      fr.max = animFrames.length-1; fr.value = animFrames.length-1;
+      document.getElementById('frameval').textContent = fr.value;
+      document.getElementById('anim').style.display='block';
+      setFrame(animFrames.length-1);
+    }
+  } else {
+    layerGroups.adjacency.add(segmentsObj(rd.reduced_points, rd.adjacency_edges, COL.edge, 0.85));
+    layerGroups.skeleton.add(pointsObj(rd.reduced_points, COL.skelNode, 1.0));
+  }
+
+  // consolidation highlight
+  if (S.consolidate && S.consolidate.merged_edges.length){
+    layerGroups.merged.add(segmentsObj(S.consolidate.before_points, S.consolidate.merged_edges, COL.merged, 1.0));
+    S.consolidate.merged_edges.forEach(e=>{
+      layerGroups.merged.add(sphere(S.consolidate.before_points[e[0]], COL.merged, sceneScale*0.018));
+      layerGroups.merged.add(sphere(S.consolidate.before_points[e[1]], COL.merged, sceneScale*0.018));
+    });
+  }
+
+  // topology: degrees, branch points, segments
+  const T = S.topology;
+  const kindCol = { tip:COL.tip, interior:COL.interior, branch:COL.branch, isolated:COL.isolated };
+  const nodeIds = Object.keys(T.degree).map(Number).sort((a,b)=>a-b);
+  const degCoords = nodeIds.map(i=>T.coords[i]);
+  const degCols = T.kinds; // aligned to graph.nodes() order == nodeIds order
+  layerGroups.degrees.add(pointsObj(degCoords, null, 1.5, degCols.map(k=>kindCol[k])));
+  // tips as little markers too
+  T.tips.forEach(i=> layerGroups.degrees.add(sphere(T.coords[i], COL.tip, sceneScale*0.012)));
+
+  T.branch_points.forEach(p=> layerGroups.branch.add(sphere(p, COL.branch, sceneScale*0.028)));
+
+  T.segments.forEach((s,i)=>{
+    if (s.points.length < 2){ // isolated point
+      layerGroups.segments.add(sphere(T.coords[s.points[0]], COL.isolated, sceneScale*0.02)); return;
+    }
+    const col = new THREE.Color().setHSL(SEG_HUES[i%SEG_HUES.length], 0.7, 0.6).getHex();
+    const pts = s.points.map(idx=>T.coords[idx]);
+    layerGroups.segments.add(polylineObj(pts, col, s.closed, false));
+    // thicken with a faint point trail so thin lines are visible
+    layerGroups.segments.add(pointsObj(pts, col, 0.9));
+  });
+
+  // info + legend
+  document.getElementById('summary').textContent = S.summary;
+  const notes = (S.notes||[]).join('\n');
+  document.getElementById('notes').textContent =
+    `effective mode: ${S.effective_mode}\n` + notes;
+  buildLegend(S);
+  buildStepper(S);
+  applyVisibility();
+}
+
+// contraction animation
+let playing = false, playT = 0;
+function setFrame(k){
+  if(!animFrames || !animAttr) return;
+  const f = animFrames[k];
+  for(let i=0;i<f.length;i++){ animAttr.setXYZ(i, f[i][0], f[i][1], f[i][2]); }
+  animAttr.needsUpdate = true;
+  document.getElementById('frameval').textContent = k;
+  document.getElementById('frame').value = k;
+}
+document.getElementById('frame').addEventListener('input', e=> setFrame(+e.target.value));
+document.getElementById('play').addEventListener('click', e=>{
+  playing = !playing; playT = 0;
+  e.target.textContent = playing ? '❚❚ Pause' : '▶ Play';
+});
+function tickAnim(){
+  if(!animFrames) return;
+  playT += 1;
+  if(playT % 6 === 0){
+    let k = (+document.getElementById('frame').value + 1) % animFrames.length;
+    setFrame(k);
+  }
+}
+
+// ---------------------------------------------------------------- legend + stepper
+function buildLegend(S){
+  const items = [['Input (curve)',COL.curve]];
+  if (S.reduce.mode==='collapse') items.push(['Contracted',COL.contracted],['Skeleton',COL.skelNode]);
+  else items.push(['Adjacency',COL.edge]);
+  items.push(['Interior',COL.interior],['Tip',COL.tip],['Branch point',COL.branch],['Ground truth',COL.truth]);
+  const el = document.getElementById('legend'); el.innerHTML='';
+  items.forEach(([t,c])=>{ const d=document.createElement('div');
+    const s=document.createElement('span'); s.className='sw';
+    s.style.background='#'+c.toString(16).padStart(6,'0');
+    d.append(s, document.createTextNode(t)); el.appendChild(d); });
+}
+
+let steps = [];
+function buildStepper(S){
+  const collapse = S.reduce.mode==='collapse';
+  steps = [];
+  steps.push({ name:'Input', layers:['input','truth'] });
+  if (collapse){
+    steps.push({ name:'Contraction', layers:['input','contraction'] });
+    steps.push({ name:'Skeleton', layers:['skeleton'] });
+  } else {
+    steps.push({ name:'Adjacency', layers:['adjacency','skeleton'] });
+  }
+  if (S.consolidate && S.consolidate.merged_edges.length)
+    steps.push({ name:'Consolidate', layers: collapse?['skeleton','merged']:['adjacency','merged'] });
+  steps.push({ name:'Degrees', layers:['degrees','branch'] });
+  steps.push({ name:'Segments', layers:['segments','branch','truth'] });
+
+  const el = document.getElementById('stepper'); el.innerHTML='';
+  steps.forEach((st,i)=>{ const b=document.createElement('div'); b.className='step'; b.textContent=`${i+1}. ${st.name}`;
+    b.addEventListener('click',()=>gotoStep(i)); el.appendChild(b); });
+  gotoStep(steps.length-1); // land on final result
+}
+function gotoStep(i){
+  LAYER_DEFS.forEach(([n])=>setLayer(n,false));
+  steps[i].layers.forEach(n=>setLayer(n,true));
+  applyVisibility();
+  document.querySelectorAll('.step').forEach((e,j)=>e.classList.toggle('active', j===i));
+}
+
+// ---------------------------------------------------------------- controls (schema-driven)
+let DATASETS = [], CFG_GROUPS = [];
+const genState = {}, cfgState = {};
+
+function ctrl(container, spec, state, onchange){
+  const wrap = document.createElement('div'); wrap.className='group';
+  if (spec.type==='enum'){
+    const l=document.createElement('label'); l.className='row';
+    l.innerHTML=`<span>${spec.label}</span>`;
+    const sel=document.createElement('select');
+    spec.options.forEach(o=>{ const opt=document.createElement('option'); opt.value=o; opt.textContent=o; sel.appendChild(opt); });
+    sel.value = state[spec.name] ?? spec.default; sel.style.gridColumn='1 / span 2';
+    const l2=document.createElement('label'); l2.className='row'; l2.append(document.createTextNode(spec.label));
+    sel.addEventListener('change',()=>{ state[spec.name]=sel.value; onchange(); });
+    wrap.innerHTML=`<div style="color:var(--muted);margin:6px 0 2px">${spec.label}</div>`;
+    wrap.appendChild(sel);
+  } else {
+    const isInt = spec.type==='int';
+    const l=document.createElement('label'); l.className='row';
+    const nm=document.createElement('span'); nm.textContent=spec.label;
+    const val=document.createElement('span'); val.className='val';
+    const r=document.createElement('input'); r.type='range';
+    r.min=spec.min; r.max=spec.max; r.step=spec.step; r.value=state[spec.name] ?? spec.default;
+    r.style.gridColumn='1 / span 2';
+    val.textContent = (+r.value).toString();
+    l.append(nm,val);
+    r.addEventListener('input',()=>{ const v=isInt?Math.round(+r.value):+r.value;
+      state[spec.name]=v; val.textContent=v.toString(); onchange(); });
+    wrap.append(l, r);
+  }
+  container.appendChild(wrap);
+}
+
+function buildGenParams(){
+  const ds = DATASETS.find(d=>d.key===genState.__dataset);
+  const box = document.getElementById('gen-params'); box.innerHTML='';
+  for(const k of Object.keys(genState)) if(k!=='__dataset') delete genState[k];
+  ds.params.forEach(p=>{ genState[p.name]=p.default;
+    ctrl(box, p, genState, scheduleRun);
+    const field = box.children[box.children.length-1].querySelector('input,select');
+    if(field) field.dataset.gen=p.name;
+  });
+}
+
+function applyRecommended(ds){
+  Object.entries(ds.recommended_config||{}).forEach(([k,v])=>{
+    cfgState[k]=v;
+    const inp = document.querySelector(`[data-cfg="${k}"]`);
+    if(inp){ inp.value=v; const sib=inp.parentElement.querySelector('.val'); if(sib) sib.textContent=v; }
+  });
+}
+
+function buildConfigParams(){
+  const box = document.getElementById('config-params'); box.innerHTML='';
+  CFG_GROUPS.forEach(grp=>{
+    const h=document.createElement('div'); h.style.cssText='color:var(--muted);font-size:11px;margin:10px 0 2px';
+    h.textContent=grp.group; box.appendChild(h);
+    grp.params.forEach(p=>{
+      cfgState[p.name] = p.default;
+      // build control and tag it so applyRecommended can update it
+      const before = box.children.length;
+      ctrl(box, p, cfgState, scheduleRun);
+      const added = box.children[box.children.length-1];
+      const field = added.querySelector('input,select'); if(field) field.dataset.cfg=p.name;
+    });
+  });
+}
+
+// ---------------------------------------------------------------- run
+let runTimer=null;
+function scheduleRun(){ if(!document.getElementById('autorun').checked) return;
+  clearTimeout(runTimer); runTimer=setTimeout(run, 220); }
+
+async function run(){
+  const status=document.getElementById('status');
+  status.textContent='running…'; status.classList.remove('err');
+  const gen={}; Object.entries(genState).forEach(([k,v])=>{ if(k!=='__dataset') gen[k]=v; });
+  const body={ dataset: genState.__dataset, gen_params: gen, config: {...cfgState},
+    animate: document.getElementById('animate').checked };
+  try{
+    const r = await fetch('/api/pipeline',{ method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body) });
+    const data = await r.json();
+    if(data.error){ status.textContent=data.error; status.classList.add('err'); console.error(data.traceback); return; }
+    rebuild(data);
+    status.textContent = `${data.stages.input.n} pts • ${data.stages.effective_mode}`;
+  }catch(e){ status.textContent='request failed'; status.classList.add('err'); console.error(e); }
+}
+
+document.getElementById('run').addEventListener('click', run);
+document.getElementById('animate').addEventListener('change', scheduleRun);
+document.getElementById('reseed').addEventListener('click', ()=>{
+  if('seed' in genState){
+    genState.seed = (genState.seed + 1) % 1000;
+    const inp = document.querySelector('#gen-params [data-gen="seed"]');
+    if(inp) inp.value = genState.seed;
+    const val = inp?.closest('.group')?.querySelector('.val');
+    if(val) val.textContent = genState.seed;
+  }
+  run();
+});
+
+// ---------------------------------------------------------------- boot
+async function boot(){
+  const [dsr, cfr] = await Promise.all([
+    fetch('/api/datasets').then(r=>r.json()),
+    fetch('/api/config-schema').then(r=>r.json()),
+  ]);
+  DATASETS = dsr.datasets; CFG_GROUPS = cfr.groups;
+  const sel=document.getElementById('dataset');
+  let group=null;
+  DATASETS.forEach(d=>{
+    if(d.category!==group){ group=d.category;
+      const og=document.createElement('optgroup'); og.label=group; og.id='og-'+group; sel.appendChild(og); }
+    const opt=document.createElement('option'); opt.value=d.key; opt.textContent=d.label;
+    sel.querySelector('#og-'+d.category).appendChild(opt);
+  });
+  buildConfigParams();
+  genState.__dataset = DATASETS[0].key;
+  sel.value = genState.__dataset;
+  buildGenParams();
+  applyRecommended(DATASETS[0]);
+  sel.addEventListener('change',()=>{
+    genState.__dataset=sel.value; buildGenParams();
+    const ds=DATASETS.find(d=>d.key===sel.value); applyRecommended(ds); run();
+  });
+  await run();
+}
+boot();
+</script>
+</body>
+</html>

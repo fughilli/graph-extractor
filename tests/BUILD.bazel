@@ -13,6 +13,7 @@ load("@rules_python//python:defs.bzl", "py_test")
         args = ["-q", "$(location %s.py)" % name],
         deps = [
             "//skelgraph",
+            "//viz:viz_lib",
             "@pypi//networkx",
             "@pypi//numpy",
             "@pypi//pytest",
@@ -22,5 +23,6 @@ load("@rules_python//python:defs.bzl", "py_test")
     for name in [
         "test_topology",
         "test_pipeline",
+        "test_viz",
     ]
 ]

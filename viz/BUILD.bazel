@@ -1,0 +1,32 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+# Synthetic data + instrumented pipeline (the browser viewer's backend logic).
+py_library(
+    name = "viz_lib",
+    srcs = [
+        "__init__.py",
+        "generators.py",
+        "trace.py",
+    ],
+    imports = [".."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//skelgraph",
+        "@pypi//networkx",
+        "@pypi//numpy",
+    ],
+)
+
+# The interactive visualizer server.
+#   bazel run //viz:server
+# then open the printed URL (serves viz/static/index.html + the JSON API).
+py_binary(
+    name = "server",
+    srcs = ["server.py"],
+    data = ["static/index.html"],
+    imports = [".."],
+    deps = [
+        ":viz_lib",
+        "@pypi//numpy",
+    ],
+)
