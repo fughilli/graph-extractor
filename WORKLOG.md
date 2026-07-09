@@ -23,9 +23,25 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
   mirrors `extract()` but calls the same primitives while capturing
   intermediates (contraction frames, adjacency/skeleton graph, consolidation,
   degrees, segments); `viz/server.py` is a stdlib HTTP server (no new deps);
-  `viz/static/index.html` is the Three.js UI (CDN). Run: `bazel run
-  //viz:server`. **Live WebGL rendering is unverified** (no browser in CI/the
-  container); the data path is covered by tests instead.
+  `viz/static/index.html` is the Three.js UI. Run: `bazel run
+  //viz:server`. **Three.js is vendored locally** under `viz/static/vendor/`
+  (`three.module.js` + `OrbitControls.js`) and referenced via an import map —
+  there is **no runtime CDN dependency**, so the viewer works offline / on
+  locked-down networks. (A CDN import previously killed the whole ES module at
+  load time on any browser that couldn't reach unpkg — empty dropdown, dead
+  buttons, stuck "loading…". Symptom to watch for: the browser only ever GETs
+  `/`, never `/api/datasets`.) `viz:server`'s Bazel `data` is `glob(["static/**"])`
+  so vendored assets ship in the runfiles. A second, latent bug surfaced once
+  the CDN import was fixed: the render loop read `let playing` before its
+  declaration (temporal dead zone), throwing on the first frame and aborting
+  the module before `boot()` — same dead-app symptom, masked earlier because
+  the module died at the CDN import first. Fixed by hoisting the
+  `playing`/`playT` declaration above the loop.
+- **Live WebGL rendering is now VERIFIED end-to-end in-container.** The overlay
+  installs Playwright + headless Chromium (`/opt/ms-playwright`); drive it with
+  `NODE_PATH=$(npm root -g) node /workspace/.pw-smoke.cjs` (server must be up).
+  Confirmed: dropdown fills (10 datasets), status leaves "loading…" for
+  `N pts • <mode>`, canvas initialises, geometry draws, zero page errors.
 - Container **port 8765 is published** to the host
   (`.claude-container-overlay/overlay.json`); the server binds `0.0.0.0` by
   default so the mapping works. Takes effect on the next `claude-container`

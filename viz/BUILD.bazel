@@ -23,7 +23,7 @@ py_library(
 py_binary(
     name = "server",
     srcs = ["server.py"],
-    data = ["static/index.html"],
+    data = glob(["static/**"]),
     imports = [".."],
     deps = [
         ":viz_lib",

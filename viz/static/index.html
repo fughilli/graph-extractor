@@ -112,10 +112,12 @@
   </div>
 </div>
 
+<!-- Three.js is vendored locally (viz/static/vendor/) so the viewer has no
+     runtime CDN dependency and works offline / on locked-down networks. -->
 <script type="importmap">
 { "imports": {
-  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  "three": "/static/vendor/three.module.js",
+  "three/addons/controls/OrbitControls.js": "/static/vendor/OrbitControls.js"
 }}
 </script>
 
@@ -154,6 +156,11 @@ function resize() {
   renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
+// Declared before the render loop: `let` bindings are in a temporal dead zone
+// until their declaration runs, and the loop's first (synchronous) frame reads
+// `playing` — referencing it here from its later declaration site would throw
+// and abort the whole module before boot().
+let playing = false, playT = 0;
 (function loop(){ requestAnimationFrame(loop); controls.update();
   if (playing) tickAnim(); renderer.render(scene, camera); })();
 
@@ -342,8 +349,7 @@ function rebuild(res){
   applyVisibility();
 }
 
-// contraction animation
-let playing = false, playT = 0;
+// contraction animation (`playing`/`playT` declared above, before the loop)
 function setFrame(k){
   if(!animFrames || !animAttr) return;
   const f = animFrames[k];
