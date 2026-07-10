@@ -73,11 +73,15 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
   graph, so it **never disconnects**. Result: junctions stay one central node
   with extrema returned to their arms (0 points absorbed on Y/X/grid), and bent
   corners stay degree-2 (no branch point, no stub). Applied in `extract.py` and
-  `viz/trace.py` for non-surface modes only (surface mode keeps its 2-D mesh);
-  the collapse-mode skeleton path is untouched. The viz shows pruned edges as an
-  orange "Pruned shortcuts" layer + a sidebar toggle. Note: this makes the grid
-  corners degree-2 bends, so a 3x2 grid yields **2** branch points (the two real
-  T-junctions), not the 6 the generator's ground-truth over-counts.
+  `viz/trace.py` for **every mode except surface** (which keeps its 2-D mesh) --
+  including the **collapse** skeleton, whose overlapping cross-sections leave a
+  little multi-node blob at a tube junction; pruning elects one central node
+  there too (e.g. the Y-tube junction blob `{3:1,4:3}` -> a single degree-3
+  centre). The viz shows pruned edges as an orange "Pruned shortcuts" layer (on
+  the Adjacency step for `none`, the Skeleton step for `collapse`) + a sidebar
+  toggle. Note: this makes grid corners degree-2 bends, so a 3x2 grid yields
+  **2** branch points (the two real T-junctions), not the 6 the generator's
+  ground-truth over-counts.
 
 ## Next up
 1. **Wire in `collapse_radius` (τ) and `axis_hint`.** τ should gate

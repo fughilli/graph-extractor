@@ -295,6 +295,9 @@ function rebuild(res){
     // skeleton nodes + edges
     layerGroups.skeleton.add(segmentsObj(rd.skeleton_points, rd.skeleton_edges, COL.skelNode, 0.9));
     layerGroups.skeleton.add(pointsObj(rd.skeleton_points, COL.skelNode, 1.3));
+    // shortcut edges pruned from the junction blob
+    if (rd.pruned_edges && rd.pruned_edges.length)
+      layerGroups.shortcuts.add(segmentsObj(rd.skeleton_points, rd.pruned_edges, COL.shortcut, 1.0));
     if (rd.contraction_frames){
       animFrames = rd.contraction_frames; animAttr = cpts.geometry.getAttribute('position');
       const fr = document.getElementById('frame');
@@ -397,7 +400,7 @@ function buildStepper(S){
   steps.push({ name:'Input', layers:['input','truth'] });
   if (collapse){
     steps.push({ name:'Contraction', layers:['input','contraction'] });
-    steps.push({ name:'Skeleton', layers:['skeleton'] });
+    steps.push({ name:'Skeleton', layers:['skeleton','shortcuts'] });
   } else {
     steps.push({ name:'Adjacency', layers:['adjacency','skeleton','shortcuts'] });
   }

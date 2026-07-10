@@ -169,6 +169,29 @@ def test_branching_tube_collapses_to_one_junction():
     assert len(topo.segments) == 3
 
 
+def test_branching_tube_junction_collapses_to_single_node():
+    # The collapse reduction leaves a little blob of degree>=3 nodes at a tube
+    # junction (overlapping cross-sections). Shortcut pruning must elect a single
+    # central junction node -- the same "connected neighbourhood -> one centre"
+    # cleanup the skeleton cases get -- without disconnecting the skeleton.
+    import networkx as nx
+    from skelgraph.reduce import collapse_to_skeleton
+    from skelgraph.neighbors import prune_shortcut_edges
+
+    dirs = [(np.cos(a), np.sin(a), 0.0)
+            for a in (0.0, 2 * np.pi / 3, 4 * np.pi / 3)]
+    pts = np.vstack([_tube(d, 6.0, 0.6, 14, 12, start=0.3) for d in dirs])
+    sk_pts, sk_g = collapse_to_skeleton(pts, ReduceConfig(mode="collapse"))
+
+    before = sum(1 for n in sk_g if sk_g.degree(n) >= 3)
+    pruned = prune_shortcut_edges(sk_g, sk_pts)
+    after = sum(1 for n in pruned if pruned.degree(n) >= 3)
+
+    assert before > 1          # collapse leaves a multi-node junction blob
+    assert after == 1          # pruning elects one central junction
+    assert nx.is_connected(pruned)
+
+
 def test_cylinder_surface_mode_keeps_points():
     pts = _cylinder_grid(radius=1.0, length=5.0, n_axial=8, n_circ=12)
     cfg = Config(reduce=ReduceConfig(mode="surface"))
