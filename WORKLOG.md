@@ -128,6 +128,40 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
    `tests/test_viz.py` covers the same via the viz backend.
 4. **I/O.** Readers/writers for common point-cloud formats (`.ply`/`.xyz`/`.npy`);
    the *visualization* half of the original item is now covered by `viz/`.
+5. **Point-cloud ↔ skeleton association + attribute-carrying output.** Associate
+   every *original* input point with its skeleton point, and emit an output
+   format that carries the mapping, so downstream can e.g. animate a "pulse"
+   travelling along the skelgraph and light up the corresponding input points.
+   Requirements / design notes:
+   - **Input points carry attributes**, the first of which is a stable **index**
+     (id). Preserve these through the pipeline; the association must be keyed by
+     that index so callers can join back to their own per-point data.
+   - **Association = nearest skeleton point.** For each input point, find the
+     nearest node on the final skeleton (post-reduce/consolidate `Topology`),
+     e.g. a `scipy.spatial.cKDTree` over `topo.coords`. Store, per skeleton node,
+     the list of input indices mapped to it (and/or per input point, its skeleton
+     node id) plus the distance. NB: `extract()` currently drops the input→node
+     correspondence — `reduce.edge_collapse` already computes exact cluster
+     membership in **collapse** mode (the `clusters` dict, original-point indices
+     per skeleton node) and should thread it out instead of only returning
+     coords+graph; for `none`/`surface` the skeleton nodes *are* input points, so
+     the map is identity/subset. A KDTree nearest-node pass is the general
+     fallback that works for every mode (and for points a reduction discarded).
+   - **Also associate to segments/branch points**, not just nodes: a pulse
+     travels along a *segment* (an ordered node chain), so it helps to know, for
+     each skeleton node, which segment(s) and position-along-segment it belongs
+     to — then a pulse at arclength *s* on segment *k* can illuminate the input
+     points whose nearest node sits near *s*.
+   - **Output format.** Extend the JSON the viz already emits (see
+     `viz/trace.py::run`) and/or add a library-level exporter: input points with
+     their attributes + assigned skeleton-node id + segment id + arclength; the
+     skeleton graph (nodes, coords, segments, branch points); enough to replay an
+     animation offline. Keep it JSON-serialisable and index-based (mirrors the
+     existing `_edges`/`_pts` helpers). Consider a `.npz` variant for large clouds.
+   - **Viz demo.** A "pulse" mode in `viz/static/index.html`: sweep a parameter
+     along a chosen segment (or flood from a branch point) and brighten input
+     cloud points bound to the nodes under the pulse — validates the association
+     end-to-end. (Points already round-trip to the browser as `stages.input`.)
 
 ## Open questions / blockers
 - None currently blocking.
