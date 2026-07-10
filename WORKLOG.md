@@ -136,32 +136,47 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
    - **Input points carry attributes**, the first of which is a stable **index**
      (id). Preserve these through the pipeline; the association must be keyed by
      that index so callers can join back to their own per-point data.
-   - **Association = nearest skeleton point.** For each input point, find the
-     nearest node on the final skeleton (post-reduce/consolidate `Topology`),
-     e.g. a `scipy.spatial.cKDTree` over `topo.coords`. Store, per skeleton node,
-     the list of input indices mapped to it (and/or per input point, its skeleton
-     node id) plus the distance. NB: `extract()` currently drops the input→node
-     correspondence — `reduce.edge_collapse` already computes exact cluster
-     membership in **collapse** mode (the `clusters` dict, original-point indices
-     per skeleton node) and should thread it out instead of only returning
-     coords+graph; for `none`/`surface` the skeleton nodes *are* input points, so
-     the map is identity/subset. A KDTree nearest-node pass is the general
-     fallback that works for every mode (and for points a reduction discarded).
-   - **Also associate to segments/branch points**, not just nodes: a pulse
-     travels along a *segment* (an ordered node chain), so it helps to know, for
-     each skeleton node, which segment(s) and position-along-segment it belongs
-     to — then a pulse at arclength *s* on segment *k* can illuminate the input
-     points whose nearest node sits near *s*.
+   - **Association = nearest point on the nearest segment *edge* (not just the
+     nearest node).** The light is a *virtual point that moves smoothly along the
+     skeleton*, so brightness must be continuous as it slides between two skeleton
+     nodes — associating to the nearest discrete node would make it pop. For each
+     input point, find the nearest **edge** (consecutive node pair `(a,b)` within
+     a segment), project the point onto that edge, and store:
+       * the edge id / its `(segment_id, local_edge_index)`,
+       * the **parameter `t ∈ [0,1]`** of the foot of the perpendicular along the
+         edge (0 = at node `a`, 1 = at node `b`; clamp the projection to the
+         segment so feet past an endpoint sit at the node),
+       * the **perpendicular distance `d_perp`** from the input point to that foot.
+     Projection: `t = clamp(dot(p-a, b-a)/|b-a|², 0, 1)`, `foot = a + t·(b-a)`,
+     `d_perp = |p - foot|`. Also store the foot's **absolute arclength** along the
+     segment (`cum_len[a] + t·|b-a|`) so a light parameterised by arclength on the
+     segment can be evaluated directly.
+   - **Falloff / illumination model.** When the light is at arclength `s` on the
+     input point's segment, the light↔point distance is
+     `d² = d_perp² + (s − foot_arclength)²`; brightness `∝ 1/d²` (inverse-square).
+     Storing `(segment_id, foot_arclength, d_perp)` per input point makes this a
+     cheap per-frame shader eval as the light sweeps — no re-running nearest-point
+     each frame. (For a light near a *branch point*, illuminate across all
+     incident segments — the branch point is the shared endpoint arclength.)
+   - **Building it.** `edge_collapse` already computes exact cluster membership in
+     **collapse** mode (the `clusters` dict) but the *edge*-projection above is a
+     general geometric pass that works for every mode: build a `cKDTree`/segment
+     index over the final `Topology` segment polylines and project each input
+     point to its nearest edge. NB: `extract()` currently drops the input→node
+     correspondence and the input attributes; both must be threaded through.
    - **Output format.** Extend the JSON the viz already emits (see
-     `viz/trace.py::run`) and/or add a library-level exporter: input points with
-     their attributes + assigned skeleton-node id + segment id + arclength; the
-     skeleton graph (nodes, coords, segments, branch points); enough to replay an
-     animation offline. Keep it JSON-serialisable and index-based (mirrors the
-     existing `_edges`/`_pts` helpers). Consider a `.npz` variant for large clouds.
-   - **Viz demo.** A "pulse" mode in `viz/static/index.html`: sweep a parameter
-     along a chosen segment (or flood from a branch point) and brighten input
-     cloud points bound to the nodes under the pulse — validates the association
-     end-to-end. (Points already round-trip to the browser as `stages.input`.)
+     `viz/trace.py::run`) and/or add a library-level exporter. Per input point:
+     its attributes (incl. the index) + `segment_id` + `foot_arclength` + `t` +
+     `d_perp`. Per segment: ordered node ids, node coords, cumulative arclengths,
+     total length. Plus branch points. Enough to replay the pulse animation
+     offline. Keep it JSON-serialisable and index-based (mirror `_edges`/`_pts`);
+     consider a `.npz` variant for large clouds.
+   - **Viz demo.** A "pulse" mode in `viz/static/index.html`: sweep the light's
+     arclength `s` along a chosen segment (or flood from a branch point) and set
+     each input point's brightness from `1/(d_perp² + (s − foot_arclength)²)`,
+     brightening the tubiform points as the pulse passes — validates the smooth,
+     r²-falloff association end-to-end. (Points already round-trip to the browser
+     as `stages.input`.)
 
 ## Open questions / blockers
 - None currently blocking.
