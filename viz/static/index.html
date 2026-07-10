@@ -309,12 +309,29 @@ function pulseBuildModel(res){
   return { segs, inc, tips };
 }
 
+// Distance an agent runs on/off the tube end while fading in/out. A few glow
+// radii, so by the far end of the runway the r^2 falloff has faded it out.
+function pulseRunway(){ return pulse.falloff * 3; }
+
+// World position at arclength `s`. Beyond a segment's ends (s<0 or s>total) it
+// *extrapolates* along the end edge, so a spawning/despawning agent runs onto/
+// off the tube end and its illumination fades smoothly instead of popping.
 function pulseWorldPos(seg, s){
-  let t = seg.closed ? ((s % seg.total) + seg.total) % seg.total
-                     : Math.max(0, Math.min(seg.total, s));
+  const pts = seg.pts;
+  if (!seg.closed && s < 0){
+    const a = pts[0], b = pts[1];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1], b[2]-a[2]) || 1e-9, u = s / L;
+    return [a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u, a[2]+(b[2]-a[2])*u];
+  }
+  if (!seg.closed && s > seg.total){
+    const n = pts.length, a = pts[n-2], b = pts[n-1];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1], b[2]-a[2]) || 1e-9, u = (s - seg.total) / L;
+    return [b[0]+(b[0]-a[0])*u, b[1]+(b[1]-a[1])*u, b[2]+(b[2]-a[2])*u];
+  }
+  const t = seg.closed ? ((s % seg.total) + seg.total) % seg.total : s;
   const cum = seg.cum;
   let k = 1; while (k < cum.length-1 && cum[k] < t) k++;
-  const a = seg.pts[k-1], b = seg.pts[k];
+  const a = pts[k-1], b = pts[k];
   const f = (t - cum[k-1]) / ((cum[k]-cum[k-1]) || 1e-9);
   return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
 }
@@ -330,35 +347,52 @@ function pulseSpawn(){
   if (!m || !m.tips.length || pulse.agents.length >= pulse.maxAgents) return;
   const tip = m.tips[(Math.random()*m.tips.length)|0];
   const seg = m.segs[tip.seg];
-  pulse.agents.push({ seg: seg.id, pos: tip.end===0 ? 0 : seg.total,
-                      dir: tip.end===0 ? 1 : -1, col: pulseNewColor() });
+  const rw = pulseRunway();               // start off the tube end and run in ('enter')
+  pulse.agents.push({ seg: seg.id, pos: tip.end===0 ? -rw : seg.total + rw,
+                      dir: tip.end===0 ? 1 : -1, col: pulseNewColor(), phase: 'enter' });
 }
 
-// Enter segment `o` (an {seg,end}) having overshot a node by `ov`.
+// Enter segment `o` (an {seg,end}) having overshot a node by `ov`. On-tube ('live').
 function pulseEnter(o, ov, col){
   const cs = pulse.model.segs[o.seg];
   return { seg: o.seg, pos: o.end===0 ? ov : cs.total - ov,
-           dir: o.end===0 ? 1 : -1, col };
+           dir: o.end===0 ? 1 : -1, col, phase: 'live' };
 }
 
 function pulseStep(dt){
   const m = pulse.model; if (!m) return;
+  const rw = pulseRunway();
   if (Math.random() < pulse.spawnRate * dt) pulseSpawn();
   const next = [];
   for (const ag of pulse.agents){
     const seg = m.segs[ag.seg];
     ag.pos += ag.dir * pulse.speed * dt;
     if (seg.closed){ ag.pos = ((ag.pos % seg.total)+seg.total)%seg.total; next.push(ag); continue; }
+
+    // Running onto the tube from the runway: fade in until it reaches the tube.
+    if (ag.phase === 'enter'){
+      if (ag.pos >= 0 && ag.pos <= seg.total) ag.phase = 'live';
+      next.push(ag); continue;
+    }
+    // Running off the tube end: keep going until past the runway, then despawn.
+    if (ag.phase === 'exit'){
+      if (ag.pos > -rw && ag.pos < seg.total + rw) next.push(ag);
+      continue;
+    }
+    // 'live' (on the tube)
     if (ag.pos >= 0 && ag.pos <= seg.total){ next.push(ag); continue; }
     // arrived at a node
     const atEnd = ag.pos > seg.total;
     const overshoot = atEnd ? ag.pos - seg.total : -ag.pos;
     const node = seg.nodeIds[atEnd ? seg.nodeIds.length-1 : 0];
     const opts = (m.inc.get(node) || []).filter(e => !(e.seg===ag.seg && e.end===(atEnd?1:0)));
-    if (opts.length === 0){                       // tip: reflect or destruct
+    if (opts.length === 0){                       // tip: reflect, or run off the end and fade out
       if (Math.random() < pulse.reflectProb){
         ag.dir *= -1;
         ag.pos = atEnd ? seg.total - overshoot : overshoot;
+        next.push(ag);
+      } else {
+        ag.phase = 'exit';                        // keep moving outward into the runway
         next.push(ag);
       }
       continue;
@@ -366,7 +400,7 @@ function pulseStep(dt){
     // branch: continue down one, maybe clone onto the others
     const pick = opts[(Math.random()*opts.length)|0];
     const cont = pulseEnter(pick, overshoot, ag.col);
-    ag.seg = cont.seg; ag.pos = cont.pos; ag.dir = cont.dir;
+    ag.seg = cont.seg; ag.pos = cont.pos; ag.dir = cont.dir; ag.phase = 'live';
     next.push(ag);
     for (const o of opts){
       if (o === pick) continue;

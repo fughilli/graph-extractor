@@ -180,7 +180,11 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
      speed, pick a segment at branch points, may clone onto the others, and
      reflect-or-destruct at tips; all rates/speeds/colour/brightness/glow/max-
      agents are live sliders (see the `pulse` object + `pulseStep`/
-     `pulseIlluminate`/`pulseBuildModel`). **Still TODO: the *backend* export**
+     `pulseIlluminate`/`pulseBuildModel`). Agents spawn a **runway** (~3 glow
+     radii) *beyond* the tube end and run in, and on despawn run *off* the end
+     before vanishing (`phase` enter/live/exit; `pulseWorldPos` extrapolates
+     past segment ends along the end edge), so they fade in/out via the r²
+     falloff instead of popping. **Still TODO: the *backend* export**
      — thread input indices/attributes through `extract()` and emit the
      per-point `(segment_id, foot_arclength, t, d_perp)` association above so the
      animation can be replayed offline / drive a real shader (the viz currently
