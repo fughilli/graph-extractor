@@ -86,6 +86,19 @@ def test_torus_collapses_to_one_loop():
     assert len(segs) == 1 and segs[0]["closed"]
 
 
+def test_tree_collapses_to_a_branching_skeleton():
+    st = _run("tree", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8,
+                       "reduce.contraction_iterations": 6})
+    T = st["topology"]
+    # A depth-4 binary tree: several real junctions, and a clean 1-D skeleton
+    # (no stray cross-section loops or isolated points).
+    assert len(T["branch_points"]) >= 5
+    assert T["isolated"] == []
+    assert not any(s["closed"] for s in T["segments"])
+    assert st["reduce"]["skeleton_points"]           # collapse produced a skeleton
+    assert "pruned_edges" in st["reduce"]            # shortcut pruning ran on it
+
+
 def test_contraction_frames_present_when_animating():
     st = _run("cylinder", {"reduce.mode": "collapse", "reduce.contraction_iterations": 8},
               animate=True)
@@ -103,6 +116,8 @@ def test_contraction_frames_present_when_animating():
     ("y_tube", {"reduce.mode": "collapse"}),
     ("cross_tube", {"reduce.mode": "collapse"}),
     ("torus", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8}),
+    ("tree", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8,
+              "reduce.contraction_iterations": 6}),
     ("cylinder", {"reduce.mode": "surface"}),
 ])
 def test_trace_indices_in_bounds(key, flat):
@@ -116,8 +131,12 @@ def test_trace_indices_in_bounds(key, flat):
     if rd["mode"] == "collapse":
         assert edges_ok(rd["contraction_graph_edges"], len(rd["contracted"]))
         assert edges_ok(rd["skeleton_edges"], len(rd["skeleton_points"]))
+        stage_n = len(rd["skeleton_points"])
     else:
         assert edges_ok(rd["adjacency_edges"], len(rd["reduced_points"]))
+        stage_n = len(rd["reduced_points"])
+    # pruned shortcut edges index into that stage's coordinates
+    assert edges_ok(rd.get("pruned_edges", []), stage_n)
 
     if "consolidate" in st:
         bp = st["consolidate"]["before_points"]

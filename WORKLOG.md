@@ -59,6 +59,19 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
   placeholders for the refinements listed under "Next up".
 - **`auto` mode** makes a single *global* collapse-vs-surface decision from
   neighbourhood-covariance eigenvalues; it is not yet per-region.
+- **`tree` tubiform generator** (`viz/generators.gen_tree`): an organic,
+  recursively-branching tube tree (trunk forks into `branch` children per
+  generation, each spread off the parent axis with per-child jitter, shrinking
+  in length+radius). Surface-sampled at a **uniform pitch** (n_axial/n_circ
+  derived per segment from `pitch`, not from radius) so one global radius graph
+  connects the whole *multi-scale* structure -- without that, coarse trunk
+  segments exceed the global radius and fragment into disconnected rings.
+  Exercises collapse + junction resolution on *many* branch points (default
+  depth 4/binary -> 7 junctions, 15 segments). The compact tree over-contracts
+  at the default 10 iterations, so its `recommended_config` sets
+  `reduce.contraction_iterations = 6` (good across depth 3-5; depth 2 is just a
+  Y, covered by `y_tube`). Deep organic trees track truth only approximately
+  (a few junctions may merge) -- inherent to the global-strength collapse.
 - **Shortcut-edge pruning** (`neighbors.prune_shortcut_edges`, on by default via
   `NeighborConfig.prune_shortcuts`). A radius/knn graph over a 1-D skeleton picks
   up "shortcut" edges that are short in space but not adjacent along the curve:

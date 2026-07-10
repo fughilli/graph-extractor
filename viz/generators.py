@@ -334,6 +334,64 @@ def gen_torus(**p) -> Tuple[np.ndarray, Dict]:
     }
 
 
+def gen_tree(**p) -> Tuple[np.ndarray, Dict]:
+    """An organic, recursively-branching tube tree (many junctions).
+
+    A trunk grows along +z and repeatedly forks into ``branch`` children, each
+    spread off the parent axis by ``spread`` degrees (with per-child jitter so
+    the tree is not perfectly symmetric).  Each generation shrinks in length and
+    radius, so deep twigs are short and thin.  Surface-sampled like the other
+    tubiform inputs: exercises collapse reduction + junction resolution on a
+    structure with **many** degree-3 branch points, not just one.
+    """
+    depth = int(p["depth"])
+    branch = int(p["branch"])
+    trunk_length = float(p["trunk_length"])
+    radius = float(p["radius"])
+    length_decay = float(p["length_decay"])
+    radius_decay = float(p["radius_decay"])
+    spread = np.radians(float(p["spread"]))
+    pitch = float(p["pitch"])
+    noise = float(p["noise"])
+    rng = _rng(p["seed"])
+
+    parts: List[np.ndarray] = []
+    polylines: List = []
+    branch_points: List = []
+
+    def grow(origin, direction, length, rad, level):
+        d = np.asarray(direction, float)
+        d = d / np.linalg.norm(d)
+        # Uniform surface density: axial spacing and ring spacing both ~= pitch,
+        # regardless of tube radius, so a single global radius graph connects the
+        # whole (multi-scale) tree and the collapse reduction stays well-posed.
+        n_axial = max(2, int(round(length / pitch))) + 1
+        n_circ = max(6, int(round(2 * np.pi * rad / pitch)))
+        parts.append(_straight_tube(d, length, rad, n_axial, n_circ, origin=origin))
+        end = np.asarray(origin, float) + d * length
+        polylines.append([list(map(float, origin)), end.tolist()])
+        if level >= depth:
+            return
+        branch_points.append(end.tolist())
+        _, u, v = _basis(d)
+        for k in range(branch):
+            azimuth = 2 * np.pi * k / branch + rng.uniform(-0.4, 0.4)
+            tilt = spread * (0.7 + 0.6 * rng.random())
+            child = (np.cos(tilt) * d
+                     + np.sin(tilt) * (np.cos(azimuth) * u + np.sin(azimuth) * v))
+            child_len = length * length_decay * (0.85 + 0.3 * rng.random())
+            grow(end, child, child_len, rad * radius_decay, level + 1)
+
+    grow(origin=np.zeros(3), direction=np.array([0.0, 0.0, 1.0]),
+         length=trunk_length, rad=radius, level=1)
+    pts = np.vstack(parts)
+    return _jitter(pts, noise, rng), {
+        "category": "tubiform",
+        "labels": np.ones(len(pts), int),
+        "truth": {"polylines": polylines, "branch_points": branch_points},
+    }
+
+
 # --------------------------------------------------------------------------
 # Registry + schema (drives the UI controls)
 # --------------------------------------------------------------------------
@@ -424,6 +482,22 @@ DATASETS: Dict[str, Dict] = {
                    _pi("n_major", 32, 8, 60, "Around loop"), _pi("n_minor", 12, 6, 30, "Around tube"),
                    _NOISE, _SEED],
         "recommended_config": {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8},
+    },
+    "tree": {
+        "label": "Tree (branching tubes)", "category": "tubiform", "fn": gen_tree,
+        "params": [_pi("depth", 4, 3, 5, "Depth (generations)"),
+                   _pi("branch", 2, 2, 3, "Children / split"),
+                   _pn("trunk_length", 5.0, 2.0, 10.0, 0.5, "Trunk length"),
+                   _pn("radius", 0.5, 0.2, 1.5, 0.05, "Trunk radius"),
+                   _pn("length_decay", 0.72, 0.4, 0.95, 0.02, "Length decay"),
+                   _pn("radius_decay", 0.72, 0.4, 0.95, 0.02, "Radius decay"),
+                   _pn("spread", 35.0, 10.0, 70.0, 2.5, "Branch spread (deg)"),
+                   _pn("pitch", 0.3, 0.15, 0.6, 0.05, "Sample pitch"), _NOISE, _SEED],
+        # The compact, multi-scale tree over-contracts at the default 10
+        # iterations; 6 keeps the junctions distinct across the usable depth
+        # range (see WORKLOG -- collapse contraction strength is global).
+        "recommended_config": {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8,
+                               "reduce.contraction_iterations": 6},
     },
 }
 
