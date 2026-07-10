@@ -77,6 +77,12 @@ class ReduceConfig:
     wl_init: Optional[float] = None      # initial contraction weight (auto if None)
     sl: float = 1.6                      # per-iteration growth of WL
     wh: float = 1.0                      # attraction-to-original weight
+    boundary_anchor: float = 8.0         # extra attraction weight for surface-
+                                         # boundary points (tube ends / segment
+                                         # tips), whose one-sided neighbourhoods
+                                         # otherwise make contraction retract them
+                                         # inward and shrink segments lengthwise.
+                                         # 0 disables (uniform anchoring).
     merge_factor: float = 0.5            # collapse edge if len < merge_factor * longest
                                          # incident edge (adaptive, scale-free)
     axis_hint: Optional[Sequence[float]] = None

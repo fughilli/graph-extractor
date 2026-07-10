@@ -169,6 +169,28 @@ def test_branching_tube_collapses_to_one_junction():
     assert len(topo.segments) == 3
 
 
+def test_boundary_anchor_reduces_lengthwise_shrinkage():
+    # Contraction thins a tube by pulling surface points toward the medial axis,
+    # but end-cap points -- neighbours only on the inward side -- also get pulled
+    # inward *axially*, retracting the tube lengthwise. Anchoring boundary points
+    # must preserve the length while still collapsing the cross-sections.
+    from skelgraph.reduce import laplacian_contraction
+    from skelgraph.neighbors import radius_graph, estimate_pitch
+
+    pts = _cylinder_grid(radius=1.0, length=10.0, n_axial=20, n_circ=16)
+    G = radius_graph(pts, 2.5 * estimate_pitch(pts))
+    z0 = np.ptp(pts[:, 2])
+    common = dict(mode="collapse", contraction_iterations=10)
+    off = laplacian_contraction(pts, ReduceConfig(boundary_anchor=0.0, **common), graph=G)
+    on = laplacian_contraction(pts, ReduceConfig(boundary_anchor=8.0, **common), graph=G)
+
+    # Both still collapse radially onto the axis...
+    assert np.linalg.norm(on[:, :2], axis=1).mean() < 0.25
+    # ...but anchoring keeps far more of the length than uniform anchoring does.
+    assert np.ptp(on[:, 2]) > 1.5 * np.ptp(off[:, 2])
+    assert np.ptp(on[:, 2]) > 0.75 * z0
+
+
 def test_branching_tube_junction_collapses_to_single_node():
     # The collapse reduction leaves a little blob of degree>=3 nodes at a tube
     # junction (overlapping cross-sections). Shortcut pruning must elect a single

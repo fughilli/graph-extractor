@@ -493,11 +493,7 @@ DATASETS: Dict[str, Dict] = {
                    _pn("radius_decay", 0.72, 0.4, 0.95, 0.02, "Radius decay"),
                    _pn("spread", 35.0, 10.0, 70.0, 2.5, "Branch spread (deg)"),
                    _pn("pitch", 0.3, 0.15, 0.6, 0.05, "Sample pitch"), _NOISE, _SEED],
-        # The compact, multi-scale tree over-contracts at the default 10
-        # iterations; 6 keeps the junctions distinct across the usable depth
-        # range (see WORKLOG -- collapse contraction strength is global).
-        "recommended_config": {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8,
-                               "reduce.contraction_iterations": 6},
+        "recommended_config": {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8},
     },
 }
 

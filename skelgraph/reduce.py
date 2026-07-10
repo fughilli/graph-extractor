@@ -37,6 +37,44 @@ def _graph_laplacian(n: int, edges) -> sp.csr_matrix:
     return (D - A).tocsr()
 
 
+def _boundary_anchor_weights(
+    points: np.ndarray, graph: nx.Graph, gain: float
+) -> np.ndarray:
+    """Per-point attraction multiplier that pins surface-*boundary* points.
+
+    A point on the open boundary of a sampled surface -- a tube end cap, a
+    segment tip -- has neighbours only on one side, so the graph Laplacian pulls
+    it *tangentially* inward and the segment retracts lengthwise.  An interior
+    surface point, by contrast, has neighbours all around, so its Laplacian pull
+    is purely *normal* (radial, toward the medial axis) -- exactly the
+    contraction we want.
+
+    Detect the boundary by the imbalance of the neighbour offsets projected onto
+    the local **tangent plane** (the two largest principal directions of the
+    neighbourhood): interior points are balanced (score ~ 0), boundary points
+    are lopsided (score ~ 0.5).  Return ``1 + gain * score`` so boundary points
+    are anchored to their original position while interior points contract
+    freely.  Computed once, from the original sampling.
+    """
+    n = len(points)
+    weights = np.ones(n)
+    if gain <= 0:
+        return weights
+    for i in range(n):
+        nb = list(graph.neighbors(i))
+        if len(nb) < 3:                       # too few to judge -> treat as edge
+            weights[i] = 1.0 + gain
+            continue
+        off = points[nb] - points[i]
+        _, vecs = np.linalg.eigh(off.T @ off)  # ascending; columns are axes
+        tangent = vecs[:, 1:]                  # drop the normal (smallest) axis
+        mean_off = off.mean(axis=0)
+        score = np.linalg.norm(mean_off @ tangent) / (
+            np.linalg.norm(off, axis=1).mean() + 1e-9)
+        weights[i] = 1.0 + gain * score
+    return weights
+
+
 def laplacian_contraction(
     points: np.ndarray, cfg: ReduceConfig, graph: Optional[nx.Graph] = None
 ) -> np.ndarray:
@@ -72,7 +110,10 @@ def laplacian_contraction(
 
     avg_deg = max(1.0, 2 * len(edges) / n)
     wl = cfg.wl_init if cfg.wl_init is not None else cfg.wh / avg_deg
-    wh = np.full(n, cfg.wh)
+    # Anchor surface-boundary points (tube ends / tips) more strongly so
+    # contraction collapses cross-sections radially without retracting segment
+    # ends -- i.e. it thins the tube without shortening it.
+    wh = cfg.wh * _boundary_anchor_weights(P, G, cfg.boundary_anchor)
     WH2 = sp.diags(wh ** 2)
 
     for _ in range(cfg.contraction_iterations):

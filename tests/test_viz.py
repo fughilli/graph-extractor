@@ -87,8 +87,7 @@ def test_torus_collapses_to_one_loop():
 
 
 def test_tree_collapses_to_a_branching_skeleton():
-    st = _run("tree", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8,
-                       "reduce.contraction_iterations": 6})
+    st = _run("tree", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8})
     T = st["topology"]
     # A depth-4 binary tree: several real junctions, and a clean 1-D skeleton
     # (no stray cross-section loops or isolated points).
@@ -116,8 +115,7 @@ def test_contraction_frames_present_when_animating():
     ("y_tube", {"reduce.mode": "collapse"}),
     ("cross_tube", {"reduce.mode": "collapse"}),
     ("torus", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8}),
-    ("tree", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8,
-              "reduce.contraction_iterations": 6}),
+    ("tree", {"reduce.mode": "collapse", "neighbors.radius_factor": 1.8}),
     ("cylinder", {"reduce.mode": "surface"}),
 ])
 def test_trace_indices_in_bounds(key, flat):

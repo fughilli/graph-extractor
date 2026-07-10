@@ -53,6 +53,8 @@ def config_schema():
              "min": 1.0, "max": 5.0, "step": 0.1, "label": "Contraction radius ×"},
             {"name": "reduce.merge_factor", "type": "float", "default": 0.5,
              "min": 0.1, "max": 1.0, "step": 0.05, "label": "Edge-collapse ×"},
+            {"name": "reduce.boundary_anchor", "type": "float", "default": 8.0,
+             "min": 0.0, "max": 20.0, "step": 1.0, "label": "Boundary anchor (0=off)"},
         ]},
         {"group": "Adjacency (none / surface / auto)", "params": [
             {"name": "neighbors.method", "type": "enum", "default": "radius",

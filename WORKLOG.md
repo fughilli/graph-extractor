@@ -67,11 +67,25 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
   connects the whole *multi-scale* structure -- without that, coarse trunk
   segments exceed the global radius and fragment into disconnected rings.
   Exercises collapse + junction resolution on *many* branch points (default
-  depth 4/binary -> 7 junctions, 15 segments). The compact tree over-contracts
-  at the default 10 iterations, so its `recommended_config` sets
-  `reduce.contraction_iterations = 6` (good across depth 3-5; depth 2 is just a
-  Y, covered by `y_tube`). Deep organic trees track truth only approximately
-  (a few junctions may merge) -- inherent to the global-strength collapse.
+  depth 4/binary -> 7 junctions, 15 segments). Robust at the default 10
+  contraction iterations now that boundary anchoring (below) stops the
+  lengthwise shrinkage that used to eat small branches. Deep organic trees
+  track truth only approximately (a few junctions may merge) -- inherent to the
+  global-strength collapse.
+- **Boundary-anchored contraction** (`ReduceConfig.boundary_anchor`, default 8;
+  0 = uniform/old behaviour). Laplacian contraction thins a tube by pulling
+  surface points toward the medial axis, but an end-cap / tip point has
+  neighbours only on the inward side, so it gets pulled *axially* inward and the
+  segment **retracts lengthwise** (a cylinder at 12 iters kept only ~7% of its
+  length; iters just above the sweet spot then let consolidation eat the tree's
+  small branches). `reduce._boundary_anchor_weights` detects such boundary
+  points by the tangential imbalance of their neighbour offsets (PCA: interior
+  ~0, boundary ~0.5) and raises their attraction weight `wh` so they stay put
+  while interior points still contract radially. Result: cylinder keeps ~87% of
+  its length at 10 iters (~51% at 12) and still collapses to the axis; the tree
+  is stable across iters 6-14; existing collapse tests (y_tube, cross_tube,
+  torus) unchanged (a torus has no boundary, so the weights are ~1 there).
+  Exposed in the viz as a "Boundary anchor" slider.
 - **Shortcut-edge pruning** (`neighbors.prune_shortcut_edges`, on by default via
   `NeighborConfig.prune_shortcuts`). A radius/knn graph over a 1-D skeleton picks
   up "shortcut" edges that are short in space but not adjacent along the curve:
