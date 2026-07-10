@@ -1,6 +1,6 @@
 # WORKLOG
 
-_Last updated: 2026-07-09 by an agent session. Read together with `git log`._
+_Last updated: 2026-07-10 by an agent session. Read together with `git log`._
 
 ## Goal
 Extract graph **topology** (branch points + segments) from 3-D point clouds
@@ -116,6 +116,12 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
    detection when collapsing. Both are currently dead fields.
 2. **Per-region `auto`.** Replace the single global collapse/surface choice
    with a per-point (mixed) reduction decision.
+2b. **Per-region contraction strength.** Boundary anchoring fixed the worst of
+   the lengthwise shrinkage, but the collapse still uses one global WL schedule,
+   so very shallow/compact trees (e.g. `tree` depth 3) still degrade at high
+   iteration counts (junctions merge). A local, curvature/scale-aware WL (or an
+   adaptive stop when radial extent stops shrinking) would remove the residual
+   iteration-count sensitivity.
 3. ~~**Loop-through-collapse end-to-end test.**~~ *Done* —
    `tests/test_pipeline.py::test_torus_collapses_to_one_loop` collapses a thick
    torus to a single closed loop (0 branch points, centerline ring of radius R);
