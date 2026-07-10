@@ -171,12 +171,20 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
      total length. Plus branch points. Enough to replay the pulse animation
      offline. Keep it JSON-serialisable and index-based (mirror `_edges`/`_pts`);
      consider a `.npz` variant for large clouds.
-   - **Viz demo.** A "pulse" mode in `viz/static/index.html`: sweep the light's
-     arclength `s` along a chosen segment (or flood from a branch point) and set
-     each input point's brightness from `1/(d_perp² + (s − foot_arclength)²)`,
-     brightening the tubiform points as the pulse passes — validates the smooth,
-     r²-falloff association end-to-end. (Points already round-trip to the browser
-     as `stages.input`.)
+   - **Viz demo — DONE (client-side).** `viz/static/index.html` now has a
+     "Pulse simulation" panel: agent-based virtual light sources travel the
+     skeleton and illuminate the input cloud with a softened r² falloff
+     (`intensity·soft/(d²+soft)`, `soft = glow_radius²`, computed as 3-D
+     light↔point distance each frame — equivalent to the `(d_perp, Δs)` encoding
+     when the light is on the segment). Agents spawn at tips, move at finite
+     speed, pick a segment at branch points, may clone onto the others, and
+     reflect-or-destruct at tips; all rates/speeds/colour/brightness/glow/max-
+     agents are live sliders (see the `pulse` object + `pulseStep`/
+     `pulseIlluminate`/`pulseBuildModel`). **Still TODO: the *backend* export**
+     — thread input indices/attributes through `extract()` and emit the
+     per-point `(segment_id, foot_arclength, t, d_perp)` association above so the
+     animation can be replayed offline / drive a real shader (the viz currently
+     recomputes illumination in JS from `stages.input` + `stages.topology`).
 
 ## Open questions / blockers
 - None currently blocking.
