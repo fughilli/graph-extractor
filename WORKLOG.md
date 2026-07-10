@@ -59,6 +59,25 @@ sampled along the edges of a 1-D network. See `README.md` for the durable spec.
   placeholders for the refinements listed under "Next up".
 - **`auto` mode** makes a single *global* collapse-vs-surface decision from
   neighbourhood-covariance eigenvalues; it is not yet per-region.
+- **Shortcut-edge pruning** (`neighbors.prune_shortcut_edges`, on by default via
+  `NeighborConfig.prune_shortcuts`). A radius/knn graph over a 1-D skeleton picks
+  up "shortcut" edges that are short in space but not adjacent along the curve:
+  the diagonal across a junction's fan of arms, and the hypotenuse across a
+  right-angle corner. These inflated node degree, so a junction became a clique
+  of degree>=3 nodes that consolidation then centroid-collapsed (absorbing the
+  arm extrema), and a corner became a triangle that fragmented into a spurious
+  branch point + stub. The fix is a Relative-Neighbourhood-Graph rule: drop edge
+  (i,j) when a **common** neighbour k is strictly closer to both endpoints (the
+  i-k-j detour proves i-j is a shortcut). Because k is a common neighbour the
+  i-k-j path already exists, and edges are pruned longest-first against the live
+  graph, so it **never disconnects**. Result: junctions stay one central node
+  with extrema returned to their arms (0 points absorbed on Y/X/grid), and bent
+  corners stay degree-2 (no branch point, no stub). Applied in `extract.py` and
+  `viz/trace.py` for non-surface modes only (surface mode keeps its 2-D mesh);
+  the collapse-mode skeleton path is untouched. The viz shows pruned edges as an
+  orange "Pruned shortcuts" layer + a sidebar toggle. Note: this makes the grid
+  corners degree-2 bends, so a 3x2 grid yields **2** branch points (the two real
+  T-junctions), not the 6 the generator's ground-truth over-counts.
 
 ## Next up
 1. **Wire in `collapse_radius` (τ) and `axis_hint`.** τ should gate

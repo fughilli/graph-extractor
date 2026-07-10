@@ -26,10 +26,12 @@ import numpy as np
 import networkx as nx
 
 from skelgraph.config import Config, ReduceConfig, NeighborConfig
-from skelgraph.neighbors import estimate_pitch, radius_graph, build_neighbor_graph
+from skelgraph.neighbors import (
+    estimate_pitch, radius_graph, build_neighbor_graph, prune_shortcut_edges,
+)
 from skelgraph.reduce import laplacian_contraction, edge_collapse, local_dimensionality
 from skelgraph.cleanup import consolidate_branch_points, median_edge_length
-from skelgraph.topology import extract_topology
+from skelgraph.topology import extract_topology, _ekey
 from skelgraph.extract import _prune_stubs
 
 
@@ -139,16 +141,25 @@ def run(points: np.ndarray, config: Config, animate: bool = False,
     else:  # none / surface
         reduced = points.copy()
         graph = build_neighbor_graph(reduced, cfg.neighbors)
+        # Shortcut-edge removal (junction fans / corners) -- 1-D skeletons only.
+        pruned_edges: List = []
+        if mode != "surface" and cfg.neighbors.prune_shortcuts:
+            before = {_ekey(a, b) for a, b in graph.edges()}
+            graph = prune_shortcut_edges(graph, reduced)
+            after = {_ekey(a, b) for a, b in graph.edges()}
+            pruned_edges = [[int(a), int(b)] for a, b in (before - after)]
         stages["reduce"] = {
             "mode": mode,
             "reduced_points": _pts(reduced),
             "adjacency_edges": _edges(graph),
+            "pruned_edges": pruned_edges,
             "method": cfg.neighbors.method,
         }
-        notes.append(
-            f"{mode}: {cfg.neighbors.method} graph, "
-            f"{graph.number_of_edges()} edges over {len(reduced)} points"
-        )
+        note = (f"{mode}: {cfg.neighbors.method} graph, "
+                f"{graph.number_of_edges()} edges over {len(reduced)} points")
+        if pruned_edges:
+            note += f" ({len(pruned_edges)} shortcut edge(s) pruned)"
+        notes.append(note)
 
     # ---- Stage 2: junction consolidation (1-D skeletons only) -----------
     if mode != "surface" and cfg.junction_merge_factor > 0:

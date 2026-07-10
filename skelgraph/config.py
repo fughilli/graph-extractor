@@ -44,6 +44,15 @@ class NeighborConfig:
     radius_factor: float = 1.6
     k: int = 10
 
+    # Remove junction/corner "shortcut" edges (a diagonal across a fan of arms,
+    # or the hypotenuse across a right-angle bend) before topology extraction.
+    # Keeps a junction as one central node -- returning the fan's outer points
+    # to their arms rather than absorbing them -- and keeps a bent segment
+    # degree-2 (no spurious branch point / stub).  Applied to radius/knn graphs
+    # of 1-D skeletons only; never in ``surface`` mode.  See
+    # :func:`skelgraph.neighbors.prune_shortcut_edges`.
+    prune_shortcuts: bool = True
+
 
 @dataclass
 class ReduceConfig:

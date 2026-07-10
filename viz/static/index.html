@@ -130,7 +130,7 @@ const COL = {
   curve: 0x8b98a8, surface: 0xd0a962, contracted: 0x59c1ff,
   edge: 0x50606f, skelNode: 0x8fb2d6, merged: 0xff3a63,
   tip: 0x35db8a, interior: 0x5b86d6, branch: 0xff4d4d, isolated: 0x9aa6b3,
-  truth: 0x39f2a0,
+  truth: 0x39f2a0, shortcut: 0xff9f45,
 };
 const SEG_HUES = [0.0, 0.58, 0.12, 0.75, 0.34, 0.88, 0.46, 0.66, 0.20, 0.94];
 
@@ -238,6 +238,7 @@ const LAYER_DEFS = [
   ['truth',       'Ground truth',           COL.truth],
   ['contraction', 'Contraction',            COL.contracted],
   ['adjacency',   'Adjacency graph',        COL.edge],
+  ['shortcuts',   'Pruned shortcuts',       COL.shortcut],
   ['skeleton',    'Skeleton (collapse)',    COL.skelNode],
   ['merged',      'Consolidated junctions', COL.merged],
   ['degrees',     'Degree classes',         COL.branch],
@@ -305,6 +306,9 @@ function rebuild(res){
   } else {
     layerGroups.adjacency.add(segmentsObj(rd.reduced_points, rd.adjacency_edges, COL.edge, 0.85));
     layerGroups.skeleton.add(pointsObj(rd.reduced_points, COL.skelNode, 1.0));
+    // shortcut edges removed by the relative-neighbourhood filter
+    if (rd.pruned_edges && rd.pruned_edges.length)
+      layerGroups.shortcuts.add(segmentsObj(rd.reduced_points, rd.pruned_edges, COL.shortcut, 1.0));
   }
 
   // consolidation highlight
@@ -377,6 +381,7 @@ function buildLegend(S){
   const items = [['Input (curve)',COL.curve]];
   if (S.reduce.mode==='collapse') items.push(['Contracted',COL.contracted],['Skeleton',COL.skelNode]);
   else items.push(['Adjacency',COL.edge]);
+  if (S.reduce.pruned_edges && S.reduce.pruned_edges.length) items.push(['Pruned shortcut',COL.shortcut]);
   items.push(['Interior',COL.interior],['Tip',COL.tip],['Branch point',COL.branch],['Ground truth',COL.truth]);
   const el = document.getElementById('legend'); el.innerHTML='';
   items.forEach(([t,c])=>{ const d=document.createElement('div');
@@ -394,7 +399,7 @@ function buildStepper(S){
     steps.push({ name:'Contraction', layers:['input','contraction'] });
     steps.push({ name:'Skeleton', layers:['skeleton'] });
   } else {
-    steps.push({ name:'Adjacency', layers:['adjacency','skeleton'] });
+    steps.push({ name:'Adjacency', layers:['adjacency','skeleton','shortcuts'] });
   }
   if (S.consolidate && S.consolidate.merged_edges.length)
     steps.push({ name:'Consolidate', layers: collapse?['skeleton','merged']:['adjacency','merged'] });
@@ -429,6 +434,15 @@ function ctrl(container, spec, state, onchange){
     sel.addEventListener('change',()=>{ state[spec.name]=sel.value; onchange(); });
     wrap.innerHTML=`<div style="color:var(--muted);margin:6px 0 2px">${spec.label}</div>`;
     wrap.appendChild(sel);
+  } else if (spec.type==='bool'){
+    const l=document.createElement('label'); l.className='row';
+    const nm=document.createElement('span'); nm.textContent=spec.label;
+    const cb=document.createElement('input'); cb.type='checkbox';
+    cb.checked = (state[spec.name] ?? spec.default) ? true : false;
+    cb.style.justifySelf='end'; cb.style.width='auto';
+    cb.addEventListener('change',()=>{ state[spec.name]=cb.checked; onchange(); });
+    l.append(nm, cb);
+    wrap.append(l);
   } else {
     const isInt = spec.type==='int';
     const l=document.createElement('label'); l.className='row';

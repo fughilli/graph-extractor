@@ -5,6 +5,7 @@ import networkx as nx
 import pytest
 
 from skelgraph.topology import extract_topology
+from skelgraph.neighbors import prune_shortcut_edges
 
 
 def _graph(edges, n):
@@ -12,6 +13,37 @@ def _graph(edges, n):
     G.add_nodes_from(range(n))
     G.add_edges_from(edges)
     return G
+
+
+def test_prune_shortcut_removes_corner_hypotenuse():
+    # Right triangle: the hypotenuse (1,2) is a shortcut across the corner at 0.
+    coords = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], float)
+    G = _graph([(0, 1), (0, 2), (1, 2)], 3)
+    H = prune_shortcut_edges(G, coords)
+    assert {frozenset(e) for e in H.edges()} == {frozenset((0, 1)), frozenset((0, 2))}
+    assert nx.is_connected(H)          # never disconnects
+    assert H.degree(0) == 2            # corner stays a degree-2 bend
+
+
+def test_prune_shortcut_keeps_chordless_cycle():
+    # A genuine loop sampled as a chordless ring: no point is closer to two ring
+    # neighbours than they are to each other, so every edge must survive (loops
+    # are preserved). (RNG is triangle-free, so real loops need >= 4 points --
+    # true of any realistically sampled cycle.)
+    th = np.linspace(0, 2 * np.pi, 6, endpoint=False)
+    coords = np.column_stack([np.cos(th), np.sin(th), np.zeros(6)])
+    G = _graph([(i, (i + 1) % 6) for i in range(6)], 6)
+    H = prune_shortcut_edges(G, coords)
+    assert H.number_of_edges() == 6
+    assert nx.is_connected(H)
+
+
+def test_prune_shortcut_preserves_connectivity_dense_cluster():
+    # A 5-clique (all pairs edged): pruning may thin it but must not split it.
+    coords = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0.5, 0.5, 0]], float)
+    G = nx.complete_graph(5)
+    H = prune_shortcut_edges(G, coords)
+    assert nx.is_connected(H)
 
 
 def _coords(n):

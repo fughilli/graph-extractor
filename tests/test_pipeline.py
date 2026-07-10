@@ -28,6 +28,72 @@ def test_y_junction_from_points():
         assert s.n_branch_ends == 1
 
 
+def test_x_junction_returns_extrema_to_arms():
+    # Four arms meeting at the origin. A radius graph links each arm's first
+    # point to the neighbouring arms' first points (diagonals across the fan),
+    # which without pruning would inflate them to degree>=3 and let
+    # consolidation absorb them into the junction. Shortcut pruning must leave
+    # one degree-4 centre and return every arm point to its arm.
+    pitch = 1.0
+    dirs = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)]
+    arms = [_chain((0, 0, 0), d, 6, pitch) for d in dirs]
+    pts = np.vstack([np.zeros((1, 3))] + arms)      # 1 + 4*6 = 25 points
+
+    topo = extract(pts, Config(reduce=ReduceConfig(mode="none")))
+    assert len(topo.branch_points) == 1
+    assert np.allclose(topo.branch_points[0], [0, 0, 0], atol=1e-9)
+    arm_segs = [s for s in topo.segments if s.n_branch_ends == 1]
+    assert len(arm_segs) == 4
+    assert len(topo.segments) == 4
+    # No point absorbed into the junction: all 25 survive as graph nodes...
+    assert len(topo.coords) == len(pts)
+    # ...and each arm keeps the junction + all six of its points.
+    for s in arm_segs:
+        assert len(s.points) == 7
+
+
+def test_x_junction_without_pruning_absorbs_extrema():
+    # The same cloud with pruning off: the fan collapses and arm points are
+    # absorbed, so fewer nodes survive. Locks in what the flag controls.
+    pitch = 1.0
+    dirs = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)]
+    pts = np.vstack([np.zeros((1, 3))] + [_chain((0, 0, 0), d, 6, pitch) for d in dirs])
+    cfg = Config(reduce=ReduceConfig(mode="none"),
+                 neighbors=NeighborConfig(prune_shortcuts=False))
+    topo = extract(pts, cfg)
+    assert len(topo.coords) < len(pts)              # extrema were absorbed
+
+
+def _grid_points(nx_, ny_, spacing, pitch):
+    xs = np.arange(nx_) * spacing
+    ys = np.arange(ny_) * spacing
+    per = max(1, round(spacing / pitch))
+    parts = []
+    for y in ys:
+        parts.append(np.linspace([xs[0], y, 0], [xs[-1], y, 0], per * (nx_ - 1) + 1))
+    for x in xs:
+        parts.append(np.linspace([x, ys[0], 0], [x, ys[-1], 0], per * (ny_ - 1) + 1))
+    return np.unique(np.round(np.vstack(parts), 6), axis=0)
+
+
+def test_grid_corners_stay_degree_two():
+    # In a 3x2 lattice, only the two edge-midpoint crossings are real (T)
+    # junctions; the four outer corners are 90-degree bends. The corner diagonal
+    # shortcut must be pruned so each corner stays a single degree-2 bend --
+    # no branch point, no stub segment.
+    pts = _grid_points(3, 2, 4.0, 0.5)
+    topo = extract(pts, Config(reduce=ReduceConfig(mode="none")))
+    assert len(topo.branch_points) == 2
+    stubs = [s for s in topo.segments if s.n_branch_ends == 1 and not s.closed]
+    assert stubs == []                              # no spurious corner stubs
+    # Each corner survives as exactly one degree-2 node.
+    for cx, cy in [(0, 0), (8, 0), (0, 4), (8, 4)]:
+        idx = np.where((np.abs(topo.coords[:, 0] - cx) < 1e-6)
+                       & (np.abs(topo.coords[:, 1] - cy) < 1e-6))[0]
+        assert len(idx) == 1
+        assert topo.graph.degree(int(idx[0])) == 2
+
+
 def test_open_line_from_points():
     pts = _chain((0, 0, 0), (1, 0, 0), 20, 0.5)
     topo = extract(pts, Config(reduce=ReduceConfig(mode="none")))

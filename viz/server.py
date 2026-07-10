@@ -61,6 +61,8 @@ def config_schema():
              "min": 1.0, "max": 3.0, "step": 0.05, "label": "Radius ×"},
             {"name": "neighbors.k", "type": "int", "default": 10, "min": 2, "max": 20,
              "step": 1, "label": "k (knn / mst)"},
+            {"name": "neighbors.prune_shortcuts", "type": "bool", "default": True,
+             "label": "Prune shortcut edges"},
         ]},
         {"group": "Topology cleanup", "params": [
             {"name": "junction_merge_factor", "type": "float", "default": 2.0,
